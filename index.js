@@ -66,12 +66,14 @@ function canGetPromo(userId) {
     const lastTime = new Date(userHistory.lastTime);
     const now = new Date();
     const timeDiff = now - lastTime;
-    const hoursLeft = Math.max(0, 24 - Math.floor(timeDiff / (1000 * 60 * 60)));
-    const minutesLeft = Math.max(0, 60 - Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60)));
+    const timeLeft = (24 * 60 * 60 * 1000) - timeDiff;
     
     if (timeDiff >= 24 * 60 * 60 * 1000) {
         return { canGet: true, timeLeft: 0 };
     }
+    
+    const hoursLeft = Math.floor(timeLeft / (1000 * 60 * 60));
+    const minutesLeft = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
     
     return { 
         canGet: false, 
@@ -169,7 +171,7 @@ bot.onText(/\/start/, (msg) => {
         '✅ Вы подписаны на рассылку промокодов\n' +
         '⏰ Промокоды выдаются каждые 24 часа\n' +
         '🎮 Используйте промокоды в игре TON BATTLE \\(Roblox\\)\n\n' +
-        '👇 Нажмите кнопку ниже для получения промокода:',
+        '👇 Нажмите кнопку для получения промокода:',
         { parse_mode: 'MarkdownV2', reply_markup: keyboard }
     );
 });
@@ -271,10 +273,6 @@ bot.on('callback_query', (query) => {
         
         if (!promoCheck.canGet) {
             recordAttempt(userId);
-            bot.answerCallbackQuery(query.id, {
-                text: `⏰ Следующий промокод через ${promoCheck.hoursLeft}ч ${promoCheck.minutesLeft}м`,
-                show_alert: true
-            });
             
             bot.sendMessage(chatId,
                 `⏰ *Вы уже получили промокод сегодня\\!*\n\n` +
@@ -282,6 +280,7 @@ bot.on('callback_query', (query) => {
                 `⏳ Следующий промокод через: *${promoCheck.hoursLeft}ч ${promoCheck.minutesLeft}м*`,
                 { parse_mode: 'MarkdownV2' }
             );
+            bot.answerCallbackQuery(query.id);
             return;
         }
         
@@ -333,10 +332,14 @@ bot.on('callback_query', (query) => {
         
         if (!promoCheck.canGet) {
             recordAttempt(userId);
-            bot.answerCallbackQuery(query.id, {
-                text: `⏰ Следующий промокод через ${promoCheck.hoursLeft}ч ${promoCheck.minutesLeft}м`,
-                show_alert: true
-            });
+            
+            bot.sendMessage(chatId,
+                `⏰ *Вы уже получили промокод сегодня\\!*\n\n` +
+                `🎁 Ваш текущий промокод: \`${promoCheck.lastPromo}\`\n\n` +
+                `⏳ Следующий промокод через: *${promoCheck.hoursLeft}ч ${promoCheck.minutesLeft}м*`,
+                { parse_mode: 'MarkdownV2' }
+            );
+            bot.answerCallbackQuery(query.id);
             return;
         }
         
