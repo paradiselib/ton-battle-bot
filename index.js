@@ -16,7 +16,7 @@ const PROMO_HISTORY_FILE = path.join(DATA_DIR, 'promo_history.json');
 
 const server = http.createServer((req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     
     if (req.method === 'OPTIONS') {
@@ -25,7 +25,7 @@ const server = http.createServer((req, res) => {
         return;
     }
     
-    if (req.url === '/promos') {
+    if (req.url === '/promos' && req.method === 'GET') {
         const ROBLOX_PROMOS_FILE = path.join(DATA_DIR, 'roblox_promos.json');
         
         if (fs.existsSync(ROBLOX_PROMOS_FILE)) {
@@ -36,6 +36,44 @@ const server = http.createServer((req, res) => {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end('[]');
         }
+    } else if (req.url === '/botdrops' && req.method === 'GET') {
+        const BOT_DROPS_FILE = path.join(DATA_DIR, 'bot_drops.json');
+        
+        if (fs.existsSync(BOT_DROPS_FILE)) {
+            const data = fs.readFileSync(BOT_DROPS_FILE, 'utf8');
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(data);
+        } else {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end('[]');
+        }
+    } else if (req.url === '/update-botdrops' && req.method === 'POST') {
+        let body = '';
+        
+        req.on('data', chunk => {
+            body += chunk.toString();
+        });
+        
+        req.on('end', () => {
+            try {
+                const drops = JSON.parse(body);
+                const BOT_DROPS_FILE = path.join(DATA_DIR, 'bot_drops.json');
+                
+                fs.writeFileSync(BOT_DROPS_FILE, JSON.stringify(drops, null, 2));
+                
+                cachedDrops = drops;
+                lastDropsUpdate = Date.now();
+                
+                console.log(`Обновлено ${drops.length} BotDrop предметов из Roblox`);
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, count: drops.length }));
+            } catch (error) {
+                console.error('Ошибка обновления BotDrops:', error.message);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: error.message }));
+            }
+        });
     } else {
         res.writeHead(200, { 'Content-Type': 'text/plain' });
         res.end('TON BATTLE Bot is running!');
@@ -163,25 +201,65 @@ function generatePromoCode() {
     return code;
 }
 
-function generateReward() {
+let cachedDrops = [];
+let lastDropsUpdate = 0;
+const DROPS_CACHE_DURATION = 300000;
+
+async function loadBotDrops() {
+    const now = Date.now();
+    if (cachedDrops.length > 0 && now - lastDropsUpdate < DROPS_CACHE_DURATION) {
+        return cachedDrops;
+    }
+    
+    try {
+        const response = await fetch('https://ton-battle-bot.onrender.com/botdrops');
+        const drops = await response.json();
+        
+        if (Array.isArray(drops) && drops.length > 0) {
+            cachedDrops = drops;
+            lastDropsUpdate = now;
+            console.log(`Загружено ${drops.length} BotDrop предметов из Roblox`);
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки BotDrops:', error.message);
+        if (cachedDrops.length === 0) {
+            cachedDrops = [
+                'Heart', 'Gift', 'Rose', 'Rocket', 'Flowers',
+                'Diamond', 'Ring', 'Lol Pop', 'Jester Hat',
+                'Snake Box', 'Lunar Snake', 'Tama Gadget',
+                'Holiday Drink', 'Desk Calendar', 'Bow Tie', 'Bunny Muffin'
+            ];
+        }
+    }
+    
+    return cachedDrops;
+}
+
+async function generateReward() {
     const gems = Math.floor(Math.random() * (2000 - 100 + 1)) + 100;
     
-    const drops = [
-        'Heart',
-        'Rose',
-        'Rocket',
-        'Flowers',
-        'Diamond',
-        'Ring',
-        'Gift',
-        'Lol Pop',
-        'Jester Hat',
-        'Snake Box'
-    ];
-    
+    const drops = await loadBotDrops();
     const drop = drops[Math.floor(Math.random() * drops.length)];
     
-    return { gems, drop };
+    const bonusChance = Math.random() * 100;
+    let bonus = null;
+    
+    if (bonusChance < 15) {
+        const bonusType = Math.random() * 100;
+        
+        if (bonusType < 60) {
+            const duration = Math.floor(Math.random() * 15) + 1;
+            bonus = { type: 'x2', duration: duration };
+        } else if (bonusType < 90) {
+            const duration = Math.floor(Math.random() * 10) + 1;
+            bonus = { type: 'x4', duration: duration };
+        } else {
+            const duration = Math.floor(Math.random() * 5) + 1;
+            bonus = { type: 'x6', duration: duration };
+        }
+    }
+    
+    return { gems, drop, bonus };
 }
 
 function savePromoForRoblox(promo, reward) {
@@ -195,7 +273,7 @@ function savePromoForRoblox(promo, reward) {
     
     const expiresAt = Date.now() + (24 * 60 * 60 * 1000);
     
-    robloxPromos.push({
+    const promoData = {
         Code: promo,
         Gems: reward.gems,
         Drop: reward.drop,
@@ -204,7 +282,16 @@ function savePromoForRoblox(promo, reward) {
         ExpiresAt: Math.floor(expiresAt / 1000),
         CreatedAt: new Date().toISOString(),
         Active: true
-    });
+    };
+    
+    if (reward.bonus) {
+        promoData.Bonus = {
+            Type: reward.bonus.type,
+            Duration: reward.bonus.duration
+        };
+    }
+    
+    robloxPromos.push(promoData);
     
     fs.writeFileSync(ROBLOX_PROMOS_FILE, JSON.stringify(robloxPromos, null, 2));
 }
@@ -375,19 +462,23 @@ bot.on('callback_query', (query) => {
                 savePromoForUser(userId, promoCode, reward);
                 savePromoForRoblox(promoCode, reward);
                 
-                bot.sendMessage(chatId, 
-                    '🎉 *ПРОМОКОД ПОЛУЧЕН* 🎉\n' +
+                let message = '🎉 *ПРОМОКОД ПОЛУЧЕН* 🎉\n' +
                     '━━━━━━━━━━━━━━━━━━━━\n\n' +
                     `🎁 Код: \`${promoCode}\`\n\n` +
                     `💎 *${reward.gems}* гемов\n` +
-                    `🎲 *${reward.drop}*\n\n` +
-                    '━━━━━━━━━━━━━━━━━━━━\n' +
+                    `🎲 *${reward.drop}*\n`;
+                
+                if (reward.bonus) {
+                    message += `🍀 *БОНУС:* ${reward.bonus.type} удача на ${reward.bonus.duration} мин\\!\n`;
+                }
+                
+                message += '\n━━━━━━━━━━━━━━━━━━━━\n' +
                     '📋 Нажмите на код для копирования\n' +
                     '⚔️ Активируйте в игре TON BATTLE\n\n' +
                     '⏰ Следующий через 24 часа\n' +
-                    '⚠️ Только *1 активация*',
-                    { parse_mode: 'MarkdownV2' }
-                );
+                    '⚠️ Только *1 активация*';
+                
+                bot.sendMessage(chatId, message, { parse_mode: 'MarkdownV2' });
                 bot.answerCallbackQuery(query.id);
             } else {
                 const keyboard = {
@@ -442,19 +533,23 @@ bot.on('callback_query', (query) => {
                 savePromoForUser(userId, promoCode, reward);
                 savePromoForRoblox(promoCode, reward);
                 
-                bot.sendMessage(chatId, 
-                    '✅ *СПАСИБО ЗА ПОДПИСКУ* ✅\n' +
+                let message = '✅ *СПАСИБО ЗА ПОДПИСКУ* ✅\n' +
                     '━━━━━━━━━━━━━━━━━━━━\n\n' +
                     `🎁 Код: \`${promoCode}\`\n\n` +
                     `💎 *${reward.gems}* гемов\n` +
-                    `🎲 *${reward.drop}*\n\n` +
-                    '━━━━━━━━━━━━━━━━━━━━\n' +
+                    `🎲 *${reward.drop}*\n`;
+                
+                if (reward.bonus) {
+                    message += `🍀 *БОНУС:* ${reward.bonus.type} удача на ${reward.bonus.duration} мин\\!\n`;
+                }
+                
+                message += '\n━━━━━━━━━━━━━━━━━━━━\n' +
                     '📋 Нажмите на код для копирования\n' +
                     '⚔️ Активируйте в игре TON BATTLE\n\n' +
                     '⏰ Следующий через 24 часа\n' +
-                    '⚠️ Только *1 активация*',
-                    { parse_mode: 'MarkdownV2' }
-                );
+                    '⚠️ Только *1 активация*';
+                
+                bot.sendMessage(chatId, message, { parse_mode: 'MarkdownV2' });
                 bot.answerCallbackQuery(query.id);
             } else {
                 bot.answerCallbackQuery(query.id, {
@@ -504,20 +599,28 @@ cron.schedule('0 12 * * *', () => {
     
     console.log(`Рассылка промокода: ${promoCode} для ${users.length} пользователей`);
     console.log(`Награда: ${reward.gems} гемов, Дроп: ${reward.drop}`);
+    if (reward.bonus) {
+        console.log(`Бонус: ${reward.bonus.type} удача на ${reward.bonus.duration} минут`);
+    }
     
     users.forEach(chatId => {
-        bot.sendMessage(chatId, 
-            `🎁 *Новый промокод дня\\!*\n\n` +
+        let message = `🎁 *Новый промокод дня\\!*\n\n` +
             `\`${promoCode}\`\n\n` +
             `💎 *${reward.gems}* гемов\n` +
-            `🎲 *${reward.drop}*\n\n` +
-            '📋 Нажмите на код чтобы скопировать\n' +
+            `🎲 *${reward.drop}*\n`;
+        
+        if (reward.bonus) {
+            message += `🍀 *БОНУС:* ${reward.bonus.type} удача на ${reward.bonus.duration} мин\\!\n`;
+        }
+        
+        message += '\n📋 Нажмите на код чтобы скопировать\n' +
             '⚔️ Используйте его в игре TON BATTLE\\!\n' +
-            '⏰ Следующий промокод через 24 часа',
-            { parse_mode: 'MarkdownV2' }
-        ).catch(err => {
-            console.error(`Ошибка отправки пользователю ${chatId}:`, err.message);
-        });
+            '⏰ Следующий промокод через 24 часа';
+        
+        bot.sendMessage(chatId, message, { parse_mode: 'MarkdownV2' })
+            .catch(err => {
+                console.error(`Ошибка отправки пользователю ${chatId}:`, err.message);
+            });
     });
 });
 
