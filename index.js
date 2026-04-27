@@ -201,7 +201,12 @@ function generatePromoCode() {
     return code;
 }
 
-let cachedDrops = [];
+let cachedDrops = [
+    'Heart', 'Gift', 'Rose', 'Rocket', 'Flowers',
+    'Diamond', 'Ring', 'Lol Pop', 'Jester Hat',
+    'Snake Box', 'Lunar Snake', 'Tama Gadget',
+    'Holiday Drink', 'Desk Calendar', 'Bow Tie', 'Bunny Muffin'
+];
 let lastDropsUpdate = 0;
 const DROPS_CACHE_DURATION = 300000;
 
@@ -232,14 +237,6 @@ async function loadBotDrops() {
         }
     } catch (error) {
         console.error('Ошибка загрузки BotDrops:', error.message);
-        if (cachedDrops.length === 0) {
-            cachedDrops = [
-                'Heart', 'Gift', 'Rose', 'Rocket', 'Flowers',
-                'Diamond', 'Ring', 'Lol Pop', 'Jester Hat',
-                'Snake Box', 'Lunar Snake', 'Tama Gadget',
-                'Holiday Drink', 'Desk Calendar', 'Bow Tie', 'Bunny Muffin'
-            ];
-        }
     }
     
     return cachedDrops;
@@ -249,7 +246,7 @@ async function generateReward() {
     const gems = Math.floor(Math.random() * (2000 - 100 + 1)) + 100;
     
     const drops = await loadBotDrops();
-    const drop = drops[Math.floor(Math.random() * drops.length)];
+    const drop = drops[Math.floor(Math.random() * drops.length)] || 'Heart';
     
     const bonusChance = Math.random() * 100;
     let bonus = null;
@@ -320,7 +317,9 @@ bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
     const users = loadUsers();
     
-    if (!users.includes(chatId)) {
+    const isNewUser = !users.includes(chatId);
+    
+    if (isNewUser) {
         users.push(chatId);
         saveUsers(users);
     }
@@ -334,17 +333,23 @@ bot.onText(/\/start/, (msg) => {
         ]
     };
     
-    bot.sendMessage(chatId, 
-        '⚔️ *TON BATTLE \\| PROMOCODE* ⚔️\n' +
-        '━━━━━━━━━━━━━━━━━━━━\n\n' +
-        '✅ Вы подписаны на рассылку\n' +
-        '⏰ Новые промокоды каждые 24 часа\n' +
-        '💎 Награды от 100 до 2000 гемов\n' +
-        '🎲 Эксклюзивные дропы\n\n' +
-        '━━━━━━━━━━━━━━━━━━━━\n' +
-        '👇 Получите свой промокод:',
-        { parse_mode: 'MarkdownV2', reply_markup: keyboard }
-    );
+    const welcomeMessage = isNewUser 
+        ? '⚔️ *TON BATTLE \\| PROMOCODE* ⚔️\n' +
+          '━━━━━━━━━━━━━━━━━━━━\n\n' +
+          '✅ Вы подписаны на рассылку\n' +
+          '⏰ Новые промокоды каждые 24 часа\n' +
+          '💎 Награды от 100 до 2000 гемов\n' +
+          '🎲 Эксклюзивные дропы\n\n' +
+          '━━━━━━━━━━━━━━━━━━━━\n' +
+          '👇 Получите свой промокод:'
+        : '⚔️ *TON BATTLE \\| PROMOCODE* ⚔️\n' +
+          '━━━━━━━━━━━━━━━━━━━━\n\n' +
+          '✅ Вы уже подписаны на рассылку\n' +
+          '⏰ Новые промокоды каждые 24 часа\n\n' +
+          '━━━━━━━━━━━━━━━━━━━━\n' +
+          '👇 Получите свой промокод:';
+    
+    bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'MarkdownV2', reply_markup: keyboard });
 });
 
 bot.onText(/\/stop/, (msg) => {
@@ -636,3 +641,9 @@ cron.schedule('0 12 * * *', async () => {
 
 console.log('⚔️ TON BATTLE | PROMOCODE бот запущен!');
 console.log('⏰ Промокоды будут рассылаться каждый день в 12:00');
+
+loadBotDrops().then(() => {
+    console.log('✅ BotDrops загружены:', cachedDrops.length, 'предметов');
+}).catch(err => {
+    console.error('⚠️ Ошибка загрузки BotDrops, используется дефолтный список');
+});
