@@ -15,8 +15,31 @@ const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const PROMO_HISTORY_FILE = path.join(DATA_DIR, 'promo_history.json');
 
 const server = http.createServer((req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('TON BATTLE Bot is running!');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    
+    if (req.method === 'OPTIONS') {
+        res.writeHead(200);
+        res.end();
+        return;
+    }
+    
+    if (req.url === '/promos') {
+        const ROBLOX_PROMOS_FILE = path.join(DATA_DIR, 'roblox_promos.json');
+        
+        if (fs.existsSync(ROBLOX_PROMOS_FILE)) {
+            const data = fs.readFileSync(ROBLOX_PROMOS_FILE, 'utf8');
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(data);
+        } else {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end('[]');
+        }
+    } else {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('TON BATTLE Bot is running!');
+    }
 });
 
 server.listen(PORT, '0.0.0.0', () => {
@@ -144,21 +167,46 @@ function generateReward() {
     const gems = Math.floor(Math.random() * (2000 - 100 + 1)) + 100;
     
     const drops = [
-        'Легендарный сундук',
-        'Эпический сундук',
-        'Редкий сундук',
-        'Золотой ключ',
-        'Серебряный ключ',
-        'Усиление x2',
-        'Усиление x3',
-        'Бустер удачи',
-        'Бустер опыта',
-        'Мифический артефакт'
+        'Heart',
+        'Rose',
+        'Rocket',
+        'Flowers',
+        'Diamond',
+        'Ring',
+        'Gift',
+        'Lol Pop',
+        'Jester Hat',
+        'Snake Box'
     ];
     
     const drop = drops[Math.floor(Math.random() * drops.length)];
     
     return { gems, drop };
+}
+
+function savePromoForRoblox(promo, reward) {
+    const ROBLOX_PROMOS_FILE = path.join(DATA_DIR, 'roblox_promos.json');
+    
+    let robloxPromos = [];
+    if (fs.existsSync(ROBLOX_PROMOS_FILE)) {
+        const data = fs.readFileSync(ROBLOX_PROMOS_FILE, 'utf8');
+        robloxPromos = JSON.parse(data);
+    }
+    
+    const expiresAt = Date.now() + (24 * 60 * 60 * 1000);
+    
+    robloxPromos.push({
+        Code: promo,
+        Gems: reward.gems,
+        Drop: reward.drop,
+        MaxUses: 0,
+        OnePerPlayer: true,
+        ExpiresAt: Math.floor(expiresAt / 1000),
+        CreatedAt: new Date().toISOString(),
+        Active: true
+    });
+    
+    fs.writeFileSync(ROBLOX_PROMOS_FILE, JSON.stringify(robloxPromos, null, 2));
 }
 
 async function checkSubscription(userId) {
@@ -253,6 +301,7 @@ bot.onText(/\/promo/, (msg) => {
             const promoCode = generatePromoCode();
             const reward = generateReward();
             savePromoForUser(userId, promoCode, reward);
+            savePromoForRoblox(promoCode, reward);
             
             bot.sendMessage(chatId, 
                 `🎁 *Ваш промокод:* \`${promoCode}\`\n\n` +
@@ -324,6 +373,7 @@ bot.on('callback_query', (query) => {
                 const promoCode = generatePromoCode();
                 const reward = generateReward();
                 savePromoForUser(userId, promoCode, reward);
+                savePromoForRoblox(promoCode, reward);
                 
                 bot.sendMessage(chatId, 
                     '🎉 *ПРОМОКОД ПОЛУЧЕН* 🎉\n' +
@@ -390,6 +440,7 @@ bot.on('callback_query', (query) => {
                 const promoCode = generatePromoCode();
                 const reward = generateReward();
                 savePromoForUser(userId, promoCode, reward);
+                savePromoForRoblox(promoCode, reward);
                 
                 bot.sendMessage(chatId, 
                     '✅ *СПАСИБО ЗА ПОДПИСКУ* ✅\n' +
@@ -447,16 +498,23 @@ bot.on('callback_query', (query) => {
 cron.schedule('0 12 * * *', () => {
     const users = loadUsers();
     const promoCode = generatePromoCode();
+    const reward = generateReward();
+    
+    savePromoForRoblox(promoCode, reward);
     
     console.log(`Рассылка промокода: ${promoCode} для ${users.length} пользователей`);
+    console.log(`Награда: ${reward.gems} гемов, Дроп: ${reward.drop}`);
     
     users.forEach(chatId => {
         bot.sendMessage(chatId, 
-            `🎁 Новый промокод дня: \`${promoCode}\`\n\n` +
+            `🎁 *Новый промокод дня\\!*\n\n` +
+            `\`${promoCode}\`\n\n` +
+            `💎 *${reward.gems}* гемов\n` +
+            `🎲 *${reward.drop}*\n\n` +
             '📋 Нажмите на код чтобы скопировать\n' +
-            '⚔️ Используйте его в игре TON BATTLE!\n' +
+            '⚔️ Используйте его в игре TON BATTLE\\!\n' +
             '⏰ Следующий промокод через 24 часа',
-            { parse_mode: 'Markdown' }
+            { parse_mode: 'MarkdownV2' }
         ).catch(err => {
             console.error(`Ошибка отправки пользователю ${chatId}:`, err.message);
         });
