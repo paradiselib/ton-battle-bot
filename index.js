@@ -80,16 +80,18 @@ function canGetPromo(userId) {
         hoursLeft: hoursLeft,
         minutesLeft: minutesLeft,
         lastPromo: userHistory.promo,
+        lastReward: userHistory.reward,
         attempts: userHistory.attempts || 0
     };
 }
 
-function savePromoForUser(userId, promo) {
+function savePromoForUser(userId, promo, reward) {
     const history = loadPromoHistory();
     const existing = history[userId];
     
     history[userId] = {
         promo: promo,
+        reward: reward,
         lastTime: new Date().toISOString(),
         attempts: existing ? (existing.attempts || 0) : 0,
         totalPromos: existing ? (existing.totalPromos || 0) + 1 : 1
@@ -138,6 +140,27 @@ function generatePromoCode() {
     return code;
 }
 
+function generateReward() {
+    const gems = Math.floor(Math.random() * (2000 - 100 + 1)) + 100;
+    
+    const drops = [
+        'Легендарный сундук',
+        'Эпический сундук',
+        'Редкий сундук',
+        'Золотой ключ',
+        'Серебряный ключ',
+        'Усиление x2',
+        'Усиление x3',
+        'Бустер удачи',
+        'Бустер опыта',
+        'Мифический артефакт'
+    ];
+    
+    const drop = drops[Math.floor(Math.random() * drops.length)];
+    
+    return { gems, drop };
+}
+
 async function checkSubscription(userId) {
     try {
         const member = await bot.getChatMember(CHANNEL_USERNAME, userId);
@@ -170,7 +193,7 @@ bot.onText(/\/start/, (msg) => {
         '⚔️ *Добро пожаловать в TON BATTLE \\| PROMOCODE\\!*\n\n' +
         '✅ Вы подписаны на рассылку промокодов\n' +
         '⏰ Промокоды выдаются каждые 24 часа\n' +
-        '🎮 Используйте промокоды в игре TON BATTLE \\(Roblox\\)\n\n' +
+        '🎮 Используйте промокоды в игре TON BATTLE\n\n' +
         '👇 Нажмите кнопку для получения промокода:',
         { parse_mode: 'MarkdownV2', reply_markup: keyboard }
     );
@@ -208,10 +231,15 @@ bot.onText(/\/promo/, (msg) => {
     const promoCheck = canGetPromo(userId);
     
     if (!promoCheck.canGet) {
+        const reward = promoCheck.lastReward || { gems: 0, drop: 'Неизвестно' };
+        
         bot.sendMessage(chatId,
             `⏰ *Вы уже получили промокод сегодня\\!*\n\n` +
-            `🎁 Ваш текущий промокод: \`${promoCheck.lastPromo}\`\n\n` +
-            `⏳ Следующий промокод через: *${promoCheck.hoursLeft}ч ${promoCheck.minutesLeft}м*`,
+            `🎁 Ваш текущий промокод: \`${promoCheck.lastPromo}\`\n` +
+            `💎 Награда: *${reward.gems} гемов*\n` +
+            `🎲 Дроп: *${reward.drop}*\n\n` +
+            `⏳ Следующий промокод через: *${promoCheck.hoursLeft}ч ${promoCheck.minutesLeft}м*\n\n` +
+            `⚠️ Промокод на *1 активацию*\\!`,
             { parse_mode: 'MarkdownV2' }
         );
         return;
@@ -220,13 +248,17 @@ bot.onText(/\/promo/, (msg) => {
     checkSubscription(userId).then(isSubscribed => {
         if (isSubscribed) {
             const promoCode = generatePromoCode();
-            savePromoForUser(userId, promoCode);
+            const reward = generateReward();
+            savePromoForUser(userId, promoCode, reward);
             
             bot.sendMessage(chatId, 
                 `🎁 *Ваш промокод:* \`${promoCode}\`\n\n` +
+                `💎 *Награда:* ${reward.gems} гемов\n` +
+                `🎲 *Дроп:* ${reward.drop}\n\n` +
                 '📋 Нажмите на код чтобы скопировать\n' +
-                '⚔️ Используйте его в игре TON BATTLE \\(Roblox\\)\\!\n\n' +
-                '⏰ Следующий промокод через 24 часа',
+                '⚔️ Используйте его в игре TON BATTLE\\!\n\n' +
+                '⏰ Следующий промокод через 24 часа\n' +
+                '⚠️ Промокод на *1 активацию*\\!',
                 { parse_mode: 'MarkdownV2' }
             );
         } else {
@@ -287,13 +319,17 @@ bot.on('callback_query', (query) => {
         checkSubscription(userId).then(isSubscribed => {
             if (isSubscribed) {
                 const promoCode = generatePromoCode();
-                savePromoForUser(userId, promoCode);
+                const reward = generateReward();
+                savePromoForUser(userId, promoCode, reward);
                 
                 bot.sendMessage(chatId, 
                     `🎁 *Ваш промокод:* \`${promoCode}\`\n\n` +
+                    `💎 *Награда:* ${reward.gems} гемов\n` +
+                    `🎲 *Дроп:* ${reward.drop}\n\n` +
                     '📋 Нажмите на код чтобы скопировать\n' +
                     '⚔️ Используйте его в игре TON BATTLE \\(Roblox\\)\\!\n\n' +
-                    '⏰ Следующий промокод через 24 часа',
+                    '⏰ Следующий промокод через 24 часа\n' +
+                    '⚠️ Промокод на *1 активацию*\\!',
                     { parse_mode: 'MarkdownV2' }
                 );
                 bot.answerCallbackQuery(query.id);
@@ -346,14 +382,18 @@ bot.on('callback_query', (query) => {
         checkSubscription(userId).then(isSubscribed => {
             if (isSubscribed) {
                 const promoCode = generatePromoCode();
-                savePromoForUser(userId, promoCode);
+                const reward = generateReward();
+                savePromoForUser(userId, promoCode, reward);
                 
                 bot.sendMessage(chatId, 
                     `✅ Спасибо за подписку\\!\n\n` +
                     `🎁 *Ваш промокод:* \`${promoCode}\`\n\n` +
+                    `💎 *Награда:* ${reward.gems} гемов\n` +
+                    `🎲 *Дроп:* ${reward.drop}\n\n` +
                     '📋 Нажмите на код чтобы скопировать\n' +
                     '⚔️ Используйте его в игре TON BATTLE \\(Roblox\\)\\!\n\n' +
-                    '⏰ Следующий промокод через 24 часа',
+                    '⏰ Следующий промокод через 24 часа\n' +
+                    '⚠️ Промокод на *1 активацию*\\!',
                     { parse_mode: 'MarkdownV2' }
                 );
                 bot.answerCallbackQuery(query.id);
@@ -406,7 +446,7 @@ cron.schedule('0 12 * * *', () => {
         bot.sendMessage(chatId, 
             `🎁 Новый промокод дня: \`${promoCode}\`\n\n` +
             '📋 Нажмите на код чтобы скопировать\n' +
-            '⚔️ Используйте его в игре TON BATTLE (Roblox)!\n' +
+            '⚔️ Используйте его в игре TON BATTLE!\n' +
             '⏰ Следующий промокод через 24 часа',
             { parse_mode: 'Markdown' }
         ).catch(err => {
