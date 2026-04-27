@@ -190,11 +190,14 @@ bot.onText(/\/start/, (msg) => {
     };
     
     bot.sendMessage(chatId, 
-        '⚔️ *Добро пожаловать в TON BATTLE \\| PROMOCODE\\!*\n\n' +
-        '✅ Вы подписаны на рассылку промокодов\n' +
-        '⏰ Промокоды выдаются каждые 24 часа\n' +
-        '🎮 Используйте промокоды в игре TON BATTLE\n\n' +
-        '👇 Нажмите кнопку для получения промокода:',
+        '⚔️ *TON BATTLE \\| PROMOCODE* ⚔️\n' +
+        '━━━━━━━━━━━━━━━━━━━━\n\n' +
+        '✅ Вы подписаны на рассылку\n' +
+        '⏰ Новые промокоды каждые 24 часа\n' +
+        '💎 Награды от 100 до 2000 гемов\n' +
+        '🎲 Эксклюзивные дропы\n\n' +
+        '━━━━━━━━━━━━━━━━━━━━\n' +
+        '👇 Получите свой промокод:',
         { parse_mode: 'MarkdownV2', reply_markup: keyboard }
     );
 });
@@ -212,7 +215,7 @@ bot.onText(/\/stop/, (msg) => {
         ]
     };
     
-    bot.sendMessage(chatId, '❌ Вы отписались от рассылки промокодов', { reply_markup: keyboard });
+    bot.sendMessage(chatId, '❌ Вы отписались от рассылки', { reply_markup: keyboard });
 });
 
 bot.onText(/\/promo/, (msg) => {
@@ -270,7 +273,7 @@ bot.onText(/\/promo/, (msg) => {
             };
             
             bot.sendMessage(chatId, 
-                '❌ Для получения промокода нужно подписаться на наш канал!\n\n' +
+                '❌ Нужна подписка на канал!\n\n' +
                 '📢 Подпишитесь и нажмите "✅ Я подписался"',
                 { reply_markup: keyboard }
             );
@@ -323,13 +326,16 @@ bot.on('callback_query', (query) => {
                 savePromoForUser(userId, promoCode, reward);
                 
                 bot.sendMessage(chatId, 
-                    `🎁 *Ваш промокод:* \`${promoCode}\`\n\n` +
-                    `💎 *Награда:* ${reward.gems} гемов\n` +
-                    `🎲 *Дроп:* ${reward.drop}\n\n` +
-                    '📋 Нажмите на код чтобы скопировать\n' +
-                    '⚔️ Используйте его в игре TON BATTLE \\(Roblox\\)\\!\n\n' +
-                    '⏰ Следующий промокод через 24 часа\n' +
-                    '⚠️ Промокод на *1 активацию*\\!',
+                    '🎉 *ПРОМОКОД ПОЛУЧЕН* 🎉\n' +
+                    '━━━━━━━━━━━━━━━━━━━━\n\n' +
+                    `🎁 Код: \`${promoCode}\`\n\n` +
+                    `💎 *${reward.gems}* гемов\n` +
+                    `🎲 *${reward.drop}*\n\n` +
+                    '━━━━━━━━━━━━━━━━━━━━\n' +
+                    '📋 Нажмите на код для копирования\n' +
+                    '⚔️ Активируйте в игре TON BATTLE\n\n' +
+                    '⏰ Следующий через 24 часа\n' +
+                    '⚠️ Только *1 активация*',
                     { parse_mode: 'MarkdownV2' }
                 );
                 bot.answerCallbackQuery(query.id);
@@ -342,7 +348,7 @@ bot.on('callback_query', (query) => {
                 };
                 
                 bot.editMessageText(
-                    '❌ Для получения промокода нужно подписаться на наш канал!\n\n' +
+                    '❌ Нужна подписка на канал!\n\n' +
                     '📢 Подпишитесь и нажмите "✅ Я подписался"',
                     {
                         chat_id: chatId,
@@ -386,14 +392,16 @@ bot.on('callback_query', (query) => {
                 savePromoForUser(userId, promoCode, reward);
                 
                 bot.sendMessage(chatId, 
-                    `✅ Спасибо за подписку\\!\n\n` +
-                    `🎁 *Ваш промокод:* \`${promoCode}\`\n\n` +
-                    `💎 *Награда:* ${reward.gems} гемов\n` +
-                    `🎲 *Дроп:* ${reward.drop}\n\n` +
-                    '📋 Нажмите на код чтобы скопировать\n' +
-                    '⚔️ Используйте его в игре TON BATTLE \\(Roblox\\)\\!\n\n' +
-                    '⏰ Следующий промокод через 24 часа\n' +
-                    '⚠️ Промокод на *1 активацию*\\!',
+                    '✅ *СПАСИБО ЗА ПОДПИСКУ* ✅\n' +
+                    '━━━━━━━━━━━━━━━━━━━━\n\n' +
+                    `🎁 Код: \`${promoCode}\`\n\n` +
+                    `💎 *${reward.gems}* гемов\n` +
+                    `🎲 *${reward.drop}*\n\n` +
+                    '━━━━━━━━━━━━━━━━━━━━\n' +
+                    '📋 Нажмите на код для копирования\n' +
+                    '⚔️ Активируйте в игре TON BATTLE\n\n' +
+                    '⏰ Следующий через 24 часа\n' +
+                    '⚠️ Только *1 активация*',
                     { parse_mode: 'MarkdownV2' }
                 );
                 bot.answerCallbackQuery(query.id);
@@ -424,8 +432,8 @@ bot.on('callback_query', (query) => {
         };
         
         bot.editMessageText(
-            '✅ Вы снова подписаны на рассылку промокодов!\n' +
-            '⏰ Промокоды выдаются каждые 24 часа',
+            '✅ Вы снова подписаны на рассылку!\n' +
+            '⏰ Новые промокоды каждые 24 часа',
             {
                 chat_id: chatId,
                 message_id: query.message.message_id,
