@@ -7,7 +7,7 @@ const http = require('http');
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const CHANNEL_USERNAME = '@tonbattleofc';
 const CHANNEL_LINK = 'https://t.me/tonbattleofc';
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 const DATA_DIR = path.join(__dirname, 'data');
