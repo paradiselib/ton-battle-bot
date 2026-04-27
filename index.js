@@ -25,17 +25,26 @@ const server = http.createServer((req, res) => {
         return;
     }
     
-    if (req.url === '/promos' && req.method === 'GET') {
-        const ROBLOX_PROMOS_FILE = path.join(DATA_DIR, 'roblox_promos.json');
+    if (req.url === '/create-promo' && req.method === 'POST') {
+        let body = '';
         
-        if (fs.existsSync(ROBLOX_PROMOS_FILE)) {
-            const data = fs.readFileSync(ROBLOX_PROMOS_FILE, 'utf8');
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(data);
-        } else {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end('[]');
-        }
+        req.on('data', chunk => {
+            body += chunk.toString();
+        });
+        
+        req.on('end', () => {
+            try {
+                const promoData = JSON.parse(body);
+                console.log('[API] Received promo creation request:', promoData.Code);
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, code: promoData.Code }));
+            } catch (error) {
+                console.error('[API] Error creating promo:', error.message);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: error.message }));
+            }
+        });
     } else if (req.url === '/botdrops' && req.method === 'GET') {
         const BOT_DROPS_FILE = path.join(DATA_DIR, 'bot_drops.json');
         
@@ -269,38 +278,43 @@ async function generateReward() {
     return { gems, drop, bonus };
 }
 
-function savePromoForRoblox(promo, reward) {
-    const ROBLOX_PROMOS_FILE = path.join(DATA_DIR, 'roblox_promos.json');
-    
-    let robloxPromos = [];
-    if (fs.existsSync(ROBLOX_PROMOS_FILE)) {
-        const data = fs.readFileSync(ROBLOX_PROMOS_FILE, 'utf8');
-        robloxPromos = JSON.parse(data);
-    }
-    
-    const expiresAt = Date.now() + (24 * 60 * 60 * 1000);
-    
-    const promoData = {
-        Code: promo,
-        Gems: reward.gems,
-        Drop: reward.drop,
-        MaxUses: 0,
-        OnePerPlayer: true,
-        ExpiresAt: Math.floor(expiresAt / 1000),
-        CreatedAt: new Date().toISOString(),
-        Active: true
-    };
-    
-    if (reward.bonus) {
-        promoData.Bonus = {
-            Type: reward.bonus.type,
-            Duration: reward.bonus.duration
+async function createPromoInRoblox(promoData) {
+    return new Promise((resolve, reject) => {
+        const https = require('https');
+        const postData = JSON.stringify(promoData);
+        
+        const options = {
+            hostname: 'ton-battle-bot.onrender.com',
+            port: 443,
+            path: '/create-promo',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(postData)
+            }
         };
-    }
-    
-    robloxPromos.push(promoData);
-    
-    fs.writeFileSync(ROBLOX_PROMOS_FILE, JSON.stringify(robloxPromos, null, 2));
+        
+        const req = https.request(options, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    const result = JSON.parse(data);
+                    resolve(result);
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        });
+        
+        req.on('error', reject);
+        req.write(postData);
+        req.end();
+    });
+}
+
+function savePromoForRoblox(promo, reward) {
+    console.log(`[Roblox] Saving promo: ${promo}, Gems: ${reward.gems}, Drop: ${reward.drop}`);
 }
 
 async function checkSubscription(userId) {
@@ -475,13 +489,57 @@ bot.on('callback_query', (query) => {
                 const promoCode = generatePromoCode();
                 const reward = await generateReward();
                 savePromoForUser(userId, promoCode, reward);
-                savePromoForRoblox(promoCode, reward);
+                
+                const expiresAt = Math.floor((Date.now() + (24 * 60 * 60 * 1000)) / 1000);
+                
+                const promoData = {
+                    Code: promoCode,
+                    Gems: reward.gems,
+                    Drop: reward.drop,
+                    MaxUses: 0,
+                    OnePerPlayer: true,
+                    ExpiresAt: expiresAt,
+                    Active: true,
+                    Bonus: reward.bonus ? {
+                        Type: reward.bonus.type,
+                        Duration: reward.bonus.duration
+                    } : null
+                };
+                
+                const https = require('https');
+                const postData = JSON.stringify(promoData);
+                
+                const options = {
+                    hostname: 'ton-battle-bot.onrender.com',
+                    port: 443,
+                    path: '/create-promo',
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Content-Length': Buffer.byteLength(postData)
+                    }
+                };
+                
+                const req = https.request(options, (res) => {
+                    let data = '';
+                    res.on('data', chunk => data += chunk);
+                    res.on('end', () => {
+                        console.log('[Promo] Created:', promoCode);
+                    });
+                });
+                
+                req.on('error', (e) => {
+                    console.error('[Promo] Error:', e.message);
+                });
+                
+                req.write(postData);
+                req.end();
                 
                 let message = '🎉 *ПРОМОКОД ПОЛУЧЕН* 🎉\n' +
                     '━━━━━━━━━━━━━━━━━━━━\n\n' +
                     `🎁 Код: \`${promoCode}\`\n\n` +
                     `💎 *${reward.gems}* гемов\n` +
-                    `🎲 *${reward.drop}*\n`;
+                    `🎲 *NFT: ${reward.drop}*\n`;
                 
                 if (reward.bonus) {
                     message += `🍀 *БОНУС:* ${reward.bonus.type} удача на ${reward.bonus.duration} мин\\!\n`;
