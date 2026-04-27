@@ -18,7 +18,7 @@ const server = http.createServer((req, res) => {
     res.end('TON BATTLE Bot is running!');
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
     console.log(`HTTP сервер запущен на порту ${PORT}`);
 });
 
