@@ -3,7 +3,7 @@ const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
 
-const BOT_TOKEN = process.env.BOT_TOKEN || '8296253879:AAFYe_ugz6z71fn9m8CTPxS3q5vVEFq0lFs';
+const BOT_TOKEN = process.env.BOT_TOKEN;
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 const DATA_DIR = path.join(__dirname, 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
