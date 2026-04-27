@@ -25,7 +25,10 @@ const server = http.createServer((req, res) => {
         return;
     }
     
-    if (req.url === '/create-promo' && req.method === 'POST') {
+    if (req.url === '/promos' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(promoQueue));
+    } else if (req.url === '/clear-promos' && req.method === 'POST') {
         let body = '';
         
         req.on('data', chunk => {
@@ -34,13 +37,22 @@ const server = http.createServer((req, res) => {
         
         req.on('end', () => {
             try {
-                const promoData = JSON.parse(body);
-                console.log('[API] Received promo creation request:', promoData.Code);
+                const data = JSON.parse(body);
+                const codes = data.codes || [];
+                
+                codes.forEach(code => {
+                    const index = promoQueue.findIndex(p => p.Code === code);
+                    if (index !== -1) {
+                        promoQueue.splice(index, 1);
+                    }
+                });
+                
+                console.log(`[PromoQueue] Cleared ${codes.length} promos. Remaining: ${promoQueue.length}`);
                 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: true, code: promoData.Code }));
+                res.end(JSON.stringify({ success: true, cleared: codes.length, remaining: promoQueue.length }));
             } catch (error) {
-                console.error('[API] Error creating promo:', error.message);
+                console.error('[PromoQueue] Error clearing promos:', error.message);
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: false, error: error.message }));
             }
@@ -278,39 +290,12 @@ async function generateReward() {
     return { gems, drop, bonus };
 }
 
+const promoQueue = [];
+
 async function createPromoInRoblox(promoData) {
-    return new Promise((resolve, reject) => {
-        const https = require('https');
-        const postData = JSON.stringify(promoData);
-        
-        const options = {
-            hostname: 'ton-battle-bot.onrender.com',
-            port: 443,
-            path: '/create-promo',
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(postData)
-            }
-        };
-        
-        const req = https.request(options, (res) => {
-            let data = '';
-            res.on('data', chunk => data += chunk);
-            res.on('end', () => {
-                try {
-                    const result = JSON.parse(data);
-                    resolve(result);
-                } catch (e) {
-                    reject(e);
-                }
-            });
-        });
-        
-        req.on('error', reject);
-        req.write(postData);
-        req.end();
-    });
+    promoQueue.push(promoData);
+    console.log(`[PromoQueue] Added promo ${promoData.Code} to queue. Queue size: ${promoQueue.length}`);
+    return { success: true, code: promoData.Code };
 }
 
 function savePromoForRoblox(promo, reward) {
@@ -506,34 +491,7 @@ bot.on('callback_query', (query) => {
                     } : null
                 };
                 
-                const https = require('https');
-                const postData = JSON.stringify(promoData);
-                
-                const options = {
-                    hostname: 'ton-battle-bot.onrender.com',
-                    port: 443,
-                    path: '/create-promo',
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Content-Length': Buffer.byteLength(postData)
-                    }
-                };
-                
-                const req = https.request(options, (res) => {
-                    let data = '';
-                    res.on('data', chunk => data += chunk);
-                    res.on('end', () => {
-                        console.log('[Promo] Created:', promoCode);
-                    });
-                });
-                
-                req.on('error', (e) => {
-                    console.error('[Promo] Error:', e.message);
-                });
-                
-                req.write(postData);
-                req.end();
+                await createPromoInRoblox(promoData);
                 
                 let message = '🎉 *ПРОМОКОД ПОЛУЧЕН* 🎉\n' +
                     '━━━━━━━━━━━━━━━━━━━━\n\n' +
