@@ -212,8 +212,18 @@ async function loadBotDrops() {
     }
     
     try {
-        const response = await fetch('https://ton-battle-bot.onrender.com/botdrops');
-        const drops = await response.json();
+        const https = require('https');
+        const url = 'https://ton-battle-bot.onrender.com/botdrops';
+        
+        const response = await new Promise((resolve, reject) => {
+            https.get(url, (res) => {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => resolve(data));
+            }).on('error', reject);
+        });
+        
+        const drops = JSON.parse(response);
         
         if (Array.isArray(drops) && drops.length > 0) {
             cachedDrops = drops;
@@ -383,10 +393,10 @@ bot.onText(/\/promo/, (msg) => {
         return;
     }
     
-    checkSubscription(userId).then(isSubscribed => {
+    checkSubscription(userId).then(async isSubscribed => {
         if (isSubscribed) {
             const promoCode = generatePromoCode();
-            const reward = generateReward();
+            const reward = await generateReward();
             savePromoForUser(userId, promoCode, reward);
             savePromoForRoblox(promoCode, reward);
             
@@ -455,10 +465,10 @@ bot.on('callback_query', (query) => {
             return;
         }
         
-        checkSubscription(userId).then(isSubscribed => {
+        checkSubscription(userId).then(async isSubscribed => {
             if (isSubscribed) {
                 const promoCode = generatePromoCode();
-                const reward = generateReward();
+                const reward = await generateReward();
                 savePromoForUser(userId, promoCode, reward);
                 savePromoForRoblox(promoCode, reward);
                 
@@ -526,10 +536,10 @@ bot.on('callback_query', (query) => {
             return;
         }
         
-        checkSubscription(userId).then(isSubscribed => {
+        checkSubscription(userId).then(async isSubscribed => {
             if (isSubscribed) {
                 const promoCode = generatePromoCode();
-                const reward = generateReward();
+                const reward = await generateReward();
                 savePromoForUser(userId, promoCode, reward);
                 savePromoForRoblox(promoCode, reward);
                 
@@ -590,10 +600,10 @@ bot.on('callback_query', (query) => {
     }
 });
 
-cron.schedule('0 12 * * *', () => {
+cron.schedule('0 12 * * *', async () => {
     const users = loadUsers();
     const promoCode = generatePromoCode();
-    const reward = generateReward();
+    const reward = await generateReward();
     
     savePromoForRoblox(promoCode, reward);
     
