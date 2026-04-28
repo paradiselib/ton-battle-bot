@@ -727,6 +727,9 @@ cron.schedule('0 12 * * *', async () => {
 
 console.log('⚔️ TON BATTLE | PROMOCODE бот запущен!');
 console.log('⏰ Промокоды будут рассылаться каждый день в 12:00');
+console.log('[DEBUG] API_SECRET установлен:', API_SECRET ? 'ДА' : 'НЕТ');
+console.log('[DEBUG] API_SECRET длина:', API_SECRET ? API_SECRET.length : 0);
+console.log('[DEBUG] API_SECRET первые 10 символов:', API_SECRET ? API_SECRET.substring(0, 10) : 'N/A');
 
 loadBotDrops().then(() => {
     console.log('✅ BotDrops загружены:', cachedDrops.length, 'предметов');
