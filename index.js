@@ -30,6 +30,10 @@ const server = http.createServer((req, res) => {
     
     if (req.url === '/promos' && req.method === 'GET') {
         const apiSecret = req.headers['x-api-secret'];
+        console.log('[DEBUG] Received API_SECRET:', apiSecret);
+        console.log('[DEBUG] Expected API_SECRET:', API_SECRET);
+        console.log('[DEBUG] Match:', apiSecret === API_SECRET);
+        
         if (apiSecret !== API_SECRET) {
             res.writeHead(403, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Forbidden' }));
