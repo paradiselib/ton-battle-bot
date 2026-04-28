@@ -6,9 +6,11 @@ const http = require('http');
 const https = require('https');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
+const API_SECRET = process.env.API_SECRET || 'change_this_secret_key';
 const CHANNEL_USERNAME = '@tonbattleofc';
 const CHANNEL_LINK = 'https://t.me/tonbattleofc';
 const PORT = process.env.PORT || 10000;
+const MAX_BODY_SIZE = 1024 * 1024;
 
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 const DATA_DIR = path.join(__dirname, 'data');
@@ -18,7 +20,7 @@ const PROMO_HISTORY_FILE = path.join(DATA_DIR, 'promo_history.json');
 const server = http.createServer((req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-API-Secret');
     
     if (req.method === 'OPTIONS') {
         res.writeHead(200);
@@ -27,12 +29,34 @@ const server = http.createServer((req, res) => {
     }
     
     if (req.url === '/promos' && req.method === 'GET') {
+        const apiSecret = req.headers['x-api-secret'];
+        if (apiSecret !== API_SECRET) {
+            res.writeHead(403, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Forbidden' }));
+            return;
+        }
+        
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(promoQueue));
     } else if (req.url === '/clear-promos' && req.method === 'POST') {
+        const apiSecret = req.headers['x-api-secret'];
+        if (apiSecret !== API_SECRET) {
+            res.writeHead(403, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Forbidden' }));
+            return;
+        }
+        
         let body = '';
+        let bodySize = 0;
         
         req.on('data', chunk => {
+            bodySize += chunk.length;
+            if (bodySize > MAX_BODY_SIZE) {
+                res.writeHead(413, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Payload too large' }));
+                req.connection.destroy();
+                return;
+            }
             body += chunk.toString();
         });
         
@@ -41,10 +65,18 @@ const server = http.createServer((req, res) => {
                 const data = JSON.parse(body);
                 const codes = data.codes || [];
                 
+                if (!Array.isArray(codes)) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Invalid data format' }));
+                    return;
+                }
+                
                 codes.forEach(code => {
-                    const index = promoQueue.findIndex(p => p.Code === code);
-                    if (index !== -1) {
-                        promoQueue.splice(index, 1);
+                    if (typeof code === 'string') {
+                        const index = promoQueue.findIndex(p => p.Code === code);
+                        if (index !== -1) {
+                            promoQueue.splice(index, 1);
+                        }
                     }
                 });
                 
@@ -70,15 +102,37 @@ const server = http.createServer((req, res) => {
             res.end('[]');
         }
     } else if (req.url === '/update-botdrops' && req.method === 'POST') {
+        const apiSecret = req.headers['x-api-secret'];
+        if (apiSecret !== API_SECRET) {
+            res.writeHead(403, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Forbidden' }));
+            return;
+        }
+        
         let body = '';
+        let bodySize = 0;
         
         req.on('data', chunk => {
+            bodySize += chunk.length;
+            if (bodySize > MAX_BODY_SIZE) {
+                res.writeHead(413, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Payload too large' }));
+                req.connection.destroy();
+                return;
+            }
             body += chunk.toString();
         });
         
         req.on('end', () => {
             try {
                 const drops = JSON.parse(body);
+                
+                if (!Array.isArray(drops)) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Invalid data format' }));
+                    return;
+                }
+                
                 const BOT_DROPS_FILE = path.join(DATA_DIR, 'bot_drops.json');
                 
                 fs.writeFileSync(BOT_DROPS_FILE, JSON.stringify(drops, null, 2));
@@ -224,10 +278,17 @@ function generatePromoCode() {
 }
 
 let cachedDrops = [
-    'Heart', 'Gift', 'Rose', 'Rocket', 'Flowers',
-    'Diamond', 'Ring', 'Lol Pop', 'Jester Hat',
-    'Snake Box', 'Lunar Snake', 'Tama Gadget',
-    'Holiday Drink', 'Desk Calendar', 'Bow Tie', 'Bunny Muffin'
+    'Gift', 'Rose', 'Rocket', 'Flowers', 'Diamond', 'Ring', 'Lol Pop', 'Snoop Dogg',
+    'Jester Hat', 'Snake Box', 'Xmax Stocking', 'Gigner Cookie', 'Pet Snake', 'Hex Pox',
+    'Sakura Flower', 'Hanging Star', 'Eternal Rose', 'Kissed Frog', 'Perfume Bottle',
+    'Hypno Lollipop', 'Star Notepad', 'Light Sword', 'Jolly Chimp', 'Valentine Box',
+    'Trapped Heart', 'Voodoo Doll', 'Scared Cat', 'Loot Bag', 'Mini Oscar', 'Gem Signet',
+    'Heroic Helmet', 'Artisan Brick', 'Bow Tie (Velvet Gold)', 'Swicc Watch (Day Trader)',
+    'Astral Shard (Eve\'s Apple)', 'Precious Peach (Rich Green)', 'Astral Shard (Bogartite)',
+    'Heart Locket (White Wolf)', 'Mini Oscar (Fiery-Hot)', 'Artisan Brick (Fight Club)',
+    'Love Potion (Ice Queen)', 'Durov\'s Cap (Sunrise)', 'Durov\'s Cap (RGB Glitch)',
+    'Plush Pepe (Aqua Plush)', 'Durov\'s Cap (Shadow)', 'Heart Locket (Trapped Heart)',
+    'Heart Locket (Delegram)', 'Precious Peach (Peach Black)', 'Loot Bag (Miranda)'
 ];
 let lastDropsUpdate = 0;
 const DROPS_CACHE_DURATION = 300000;
@@ -264,7 +325,19 @@ async function loadBotDrops() {
 }
 
 async function generateReward() {
-    const gems = Math.floor(Math.random() * (2000 - 100 + 1)) + 100;
+    const rand = Math.random() * 100;
+    let gems;
+    
+    if (rand < 50) {
+        gems = Math.floor(Math.random() * (300 - 100 + 1)) + 100;
+    } else if (rand < 80) {
+        gems = Math.floor(Math.random() * (600 - 301 + 1)) + 301;
+    } else if (rand < 95) {
+        gems = Math.floor(Math.random() * (1000 - 601 + 1)) + 601;
+    } else {
+        gems = Math.floor(Math.random() * (2000 - 1001 + 1)) + 1001;
+    }
+    
     const drops = await loadBotDrops();
     const drop = drops[Math.floor(Math.random() * drops.length)] || 'Heart';
     
@@ -474,11 +547,7 @@ bot.on('callback_query', (query) => {
                     MaxUses: 0,
                     OnePerPlayer: true,
                     ExpiresAt: expiresAt,
-                    Active: true,
-                    Bonus: reward.bonus ? {
-                        Type: reward.bonus.type,
-                        Duration: reward.bonus.duration
-                    } : null
+                    Active: true
                 };
                 
                 await createPromoInRoblox(promoData);
@@ -557,11 +626,7 @@ bot.on('callback_query', (query) => {
                     MaxUses: 0,
                     OnePerPlayer: true,
                     ExpiresAt: expiresAt,
-                    Active: true,
-                    Bonus: reward.bonus ? {
-                        Type: reward.bonus.type,
-                        Duration: reward.bonus.duration
-                    } : null
+                    Active: true
                 };
                 
                 await createPromoInRoblox(promoData);
@@ -632,11 +697,7 @@ cron.schedule('0 12 * * *', async () => {
         MaxUses: 0,
         OnePerPlayer: true,
         ExpiresAt: expiresAt,
-        Active: true,
-        Bonus: reward.bonus ? {
-            Type: reward.bonus.type,
-            Duration: reward.bonus.duration
-        } : null
+        Active: true
     };
     
     await createPromoInRoblox(promoData);
