@@ -3,6 +3,7 @@ const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
+const https = require('https');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const CHANNEL_USERNAME = '@tonbattleofc';
@@ -238,7 +239,6 @@ async function loadBotDrops() {
     }
     
     try {
-        const https = require('https');
         const url = 'https://ton-battle-bot.onrender.com/botdrops';
         
         const response = await new Promise((resolve, reject) => {
@@ -265,29 +265,10 @@ async function loadBotDrops() {
 
 async function generateReward() {
     const gems = Math.floor(Math.random() * (2000 - 100 + 1)) + 100;
-    
     const drops = await loadBotDrops();
     const drop = drops[Math.floor(Math.random() * drops.length)] || 'Heart';
     
-    const bonusChance = Math.random() * 100;
-    let bonus = null;
-    
-    if (bonusChance < 15) {
-        const bonusType = Math.random() * 100;
-        
-        if (bonusType < 60) {
-            const duration = Math.floor(Math.random() * 15) + 1;
-            bonus = { type: 'x2', duration: duration };
-        } else if (bonusType < 90) {
-            const duration = Math.floor(Math.random() * 10) + 1;
-            bonus = { type: 'x4', duration: duration };
-        } else {
-            const duration = Math.floor(Math.random() * 5) + 1;
-            bonus = { type: 'x6', duration: duration };
-        }
-    }
-    
-    return { gems, drop, bonus };
+    return { gems, drop };
 }
 
 const promoQueue = [];
@@ -296,10 +277,6 @@ async function createPromoInRoblox(promoData) {
     promoQueue.push(promoData);
     console.log(`[PromoQueue] Added promo ${promoData.Code} to queue. Queue size: ${promoQueue.length}`);
     return { success: true, code: promoData.Code };
-}
-
-function savePromoForRoblox(promo, reward) {
-    console.log(`[Roblox] Saving promo: ${promo}, Gems: ${reward.gems}, Drop: ${reward.drop}`);
 }
 
 async function checkSubscription(userId) {
@@ -402,7 +379,20 @@ bot.onText(/\/promo/, (msg) => {
             const promoCode = generatePromoCode();
             const reward = await generateReward();
             savePromoForUser(userId, promoCode, reward);
-            savePromoForRoblox(promoCode, reward);
+            
+            const expiresAt = Math.floor((Date.now() + (24 * 60 * 60 * 1000)) / 1000);
+            
+            const promoData = {
+                Code: promoCode,
+                Gems: reward.gems,
+                Drop: reward.drop,
+                MaxUses: 0,
+                OnePerPlayer: true,
+                ExpiresAt: expiresAt,
+                Active: true
+            };
+            
+            await createPromoInRoblox(promoData);
             
             bot.sendMessage(chatId, 
                 `🎁 *Ваш промокод:* \`${promoCode}\`\n\n` +
@@ -497,13 +487,8 @@ bot.on('callback_query', (query) => {
                     '━━━━━━━━━━━━━━━━━━━━\n\n' +
                     `🎁 Код: \`${promoCode}\`\n\n` +
                     `💎 *${reward.gems}* гемов\n` +
-                    `🎲 *NFT: ${reward.drop}*\n`;
-                
-                if (reward.bonus) {
-                    message += `🍀 *БОНУС:* ${reward.bonus.type} удача на ${reward.bonus.duration} мин\\!\n`;
-                }
-                
-                message += '\n━━━━━━━━━━━━━━━━━━━━\n' +
+                    `🎲 *NFT: ${reward.drop}*\n\n` +
+                    '━━━━━━━━━━━━━━━━━━━━\n' +
                     '📋 Нажмите на код для копирования\n' +
                     '⚔️ Активируйте в игре TON BATTLE\n\n' +
                     '⏰ Следующий через 24 часа\n' +
@@ -562,19 +547,31 @@ bot.on('callback_query', (query) => {
                 const promoCode = generatePromoCode();
                 const reward = await generateReward();
                 savePromoForUser(userId, promoCode, reward);
-                savePromoForRoblox(promoCode, reward);
+                
+                const expiresAt = Math.floor((Date.now() + (24 * 60 * 60 * 1000)) / 1000);
+                
+                const promoData = {
+                    Code: promoCode,
+                    Gems: reward.gems,
+                    Drop: reward.drop,
+                    MaxUses: 0,
+                    OnePerPlayer: true,
+                    ExpiresAt: expiresAt,
+                    Active: true,
+                    Bonus: reward.bonus ? {
+                        Type: reward.bonus.type,
+                        Duration: reward.bonus.duration
+                    } : null
+                };
+                
+                await createPromoInRoblox(promoData);
                 
                 let message = '✅ *СПАСИБО ЗА ПОДПИСКУ* ✅\n' +
                     '━━━━━━━━━━━━━━━━━━━━\n\n' +
                     `🎁 Код: \`${promoCode}\`\n\n` +
                     `💎 *${reward.gems}* гемов\n` +
-                    `🎲 *${reward.drop}*\n`;
-                
-                if (reward.bonus) {
-                    message += `🍀 *БОНУС:* ${reward.bonus.type} удача на ${reward.bonus.duration} мин\\!\n`;
-                }
-                
-                message += '\n━━━━━━━━━━━━━━━━━━━━\n' +
+                    `🎲 *${reward.drop}*\n\n` +
+                    '━━━━━━━━━━━━━━━━━━━━\n' +
                     '📋 Нажмите на код для копирования\n' +
                     '⚔️ Активируйте в игре TON BATTLE\n\n' +
                     '⏰ Следующий через 24 часа\n' +
@@ -626,25 +623,33 @@ cron.schedule('0 12 * * *', async () => {
     const promoCode = generatePromoCode();
     const reward = await generateReward();
     
-    savePromoForRoblox(promoCode, reward);
+    const expiresAt = Math.floor((Date.now() + (24 * 60 * 60 * 1000)) / 1000);
+    
+    const promoData = {
+        Code: promoCode,
+        Gems: reward.gems,
+        Drop: reward.drop,
+        MaxUses: 0,
+        OnePerPlayer: true,
+        ExpiresAt: expiresAt,
+        Active: true,
+        Bonus: reward.bonus ? {
+            Type: reward.bonus.type,
+            Duration: reward.bonus.duration
+        } : null
+    };
+    
+    await createPromoInRoblox(promoData);
     
     console.log(`Рассылка промокода: ${promoCode} для ${users.length} пользователей`);
     console.log(`Награда: ${reward.gems} гемов, Дроп: ${reward.drop}`);
-    if (reward.bonus) {
-        console.log(`Бонус: ${reward.bonus.type} удача на ${reward.bonus.duration} минут`);
-    }
     
     users.forEach(chatId => {
-        let message = `🎁 *Новый промокод дня\\!*\n\n` +
+        const message = `🎁 *Новый промокод дня\\!*\n\n` +
             `\`${promoCode}\`\n\n` +
             `💎 *${reward.gems}* гемов\n` +
-            `🎲 *${reward.drop}*\n`;
-        
-        if (reward.bonus) {
-            message += `🍀 *БОНУС:* ${reward.bonus.type} удача на ${reward.bonus.duration} мин\\!\n`;
-        }
-        
-        message += '\n📋 Нажмите на код чтобы скопировать\n' +
+            `🎲 *${reward.drop}*\n\n` +
+            '📋 Нажмите на код чтобы скопировать\n' +
             '⚔️ Используйте его в игре TON BATTLE\\!\n' +
             '⏰ Следующий промокод через 24 часа';
         
@@ -660,6 +665,6 @@ console.log('⏰ Промокоды будут рассылаться кажды
 
 loadBotDrops().then(() => {
     console.log('✅ BotDrops загружены:', cachedDrops.length, 'предметов');
-}).catch(err => {
+}).catch(() => {
     console.error('⚠️ Ошибка загрузки BotDrops, используется дефолтный список');
 });
